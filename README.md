@@ -13,7 +13,6 @@ The Microsoft Power BI visuals project provides high quality data visualizations
 
 To build the library and run the sample application you will need:
 
-- A Windows 8.1 or Windows 10 64-bit machine with at least 4 GB of RAM
 - [Git](http://git-scm.com/book/en/v2/Getting-Started-Installing-Git#Installing-on-Windows)
 - [Node.js](https://nodejs.org/download/)
 - Recommended IDE - [Visual Studio Community 2015](https://www.visualstudio.com/vs-2015-product-editions) (Free for use)
@@ -73,12 +72,23 @@ To run sample app:
 
 4. Ctrl + F5 to launch the Playground.
  
+### Running PlayGround without Visual Studio
+ 
+Make sure you first follow the [Prerequisites](https://github.com/Microsoft/PowerBI-visuals#prerequisites) & [Onetime Setup](https://github.com/Microsoft/PowerBI-visuals#one-time-setup)
+ 
+To run sample app:
+ 
+1. Run gulp task 
+
+```
+gulp run:playground
+``` 
 ### Running Build and Test
 
 Use the following commands to build and test:
 ```
 gulp build  # Build Power BI visuals into `build` folder
-gulp test  # Run unit tests (requires 'PhantomJS', see Prerequisites above)
+gulp test  # Run unit tests (requires 'PhantomJS', see below)
 ```
 
 ### Installing PhantomJS

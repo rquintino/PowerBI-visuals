@@ -118,15 +118,16 @@ div.chart-content {
 
 
 #container {
-    height: 400px;
+    height: 500px;
     width: 700px;
     display: block;
     border: 1px solid #CCC;
+    overflow: hidden;
 }
 
 #container .visual {
     overflow: hidden;
-    background-color': 'white';
+    background-color: white;
     padding: 10px;
 }
 
@@ -174,4 +175,9 @@ li.slicerItemContainer {
 
 .wrongVisualWarning span {
     color:blue;
+}
+
+.slicerContainer label.slicerCheckbox input:checked + span::before,
+.slicerContainer label.slicerCheckbox span::before {
+    background-image: url(images/visuals.sprites.png) !important;
 }

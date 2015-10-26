@@ -45,4 +45,6 @@ VisualsTests
 
 # Obj dirs
 src/Clients/**/obj/*.*
-/src/Clients/Externals/ThirdPartyIP/jqueryui
+
+# IDE temp data
+.sublime-gulp.cache

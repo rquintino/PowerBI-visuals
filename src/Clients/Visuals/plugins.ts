@@ -52,7 +52,7 @@ module powerbi.visuals.plugins {
         customizeQuery: ColumnChart.customizeQuery,
         getSortableRoles: (visualSortableOptions?: VisualSortableOptions) => ColumnChart.getSortableRoles(visualSortableOptions),
     };
-    
+
     export var basicShape: IVisualPlugin = {
         name: 'basicShape',
         capabilities: basicShapeCapabilities,
@@ -232,6 +232,13 @@ module powerbi.visuals.plugins {
         create: () => new CartesianChart({ chartType: CartesianChartType.Scatter })
     };
 
+    export var playChart: IVisualPlugin = {
+        name: 'playChart',
+        watermarkKey: 'play',
+        capabilities: capabilities.playChart,
+        create: () => new CartesianChart({ chartType: CartesianChartType.Play })
+    };
+
     export var table: IVisualPlugin = {
         name: 'table',
         watermarkKey: 'table',
@@ -292,5 +299,49 @@ module powerbi.visuals.plugins {
         name: 'asterPlot',
         capabilities: samples.AsterPlot.capabilities,
         create: () => new samples.AsterPlot()
+    };
+
+    export var sunburst: IVisualPlugin = {
+        name: 'sunburst',
+        capabilities: samples.Sunburst.capabilities,
+        create: () => new samples.Sunburst()
+    };
+
+    export var owlGauge: IVisualPlugin = {
+        name: 'owlGauge',
+        watermarkKey: 'gauge',
+        capabilities: OwlGauge.capabilities,
+        create: () => new OwlGauge()
+    };
+    
+    export var streamGraph: IVisualPlugin = {
+        name: 'streamGraph',
+        watermarkKey: 'lineChart',
+        capabilities: samples.StreamGraph.capabilities,
+        create: () => new samples.StreamGraph()
+    };
+    
+    export var radarChart: IVisualPlugin = {
+        name: 'radarChart',
+        capabilities: samples.RadarChart.capabilities,
+        create: () => new samples.RadarChart()
+    };
+
+    export var dotPlot: IVisualPlugin = {
+        name: 'dotPlot',
+        capabilities: samples.DotPlot.capabilities,
+        create: () => new samples.DotPlot()
+    };
+
+    export var histogram: IVisualPlugin = {
+        name: "histogram",
+        capabilities: Histogram.capabilities,
+        create: () => new Histogram()
+    };
+
+    export var areaRangeChart: IVisualPlugin = {
+        name: 'areaRangeChart',
+        capabilities: samples.AreaRangeChart.capabilities,
+        create: () => new samples.AreaRangeChart()
     };
 }

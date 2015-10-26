@@ -47,15 +47,24 @@ var minimist = require("minimist");
 var os = require("os");
 var open = require("gulp-open");
 var gutil = require('gulp-util');
-require('require-dir')('./gulp'); 
+var express = require("express");
+require('require-dir')('./gulp');
 
-var isDebug = false;
+var expressServer = express(); 
+
+var isDebug = false,
+    openInBrowser = false,
+    noLint = false;
+
 var cliOptions = {
     string: [
         "files",
-        "openInBrowser"
     ],
-    boolean: "debug",
+    boolean: [
+        "openInBrowser",
+        "debug",
+        "noLint"
+    ],
     alias: {
         files: "f",
         debug: "d",
@@ -66,6 +75,8 @@ var cliOptions = {
 var cliArguments = minimist(process.argv.slice(2), cliOptions);
 
 isDebug = Boolean(cliArguments.debug);
+openInBrowser = Boolean(cliArguments.openInBrowser);
+noLint = Boolean(cliArguments.noLint);
 
 function getOptionFromCli(cliArg) {
     if (cliArg && cliArg.length > 0) {
@@ -232,11 +243,12 @@ var internalsPaths = ["src/Clients/VisualsCommon/obj/VisualsCommon.js",
     "src/Clients/VisualsData/obj/VisualsData.js",
     "src/Clients/Visuals/obj/Visuals.js"];
 gulp.task("combine:internal_js", function () {
-    var srcResult = gulp.src(internalsPaths);
+    var srcResult = gulp.src(internalsPaths, {
+        base: "build"
+    });
 
     if (isDebug)
         return concatFilesWithSourceMap(srcResult, "powerbi-visuals.js")
-            .pipe(concat("powerbi-visuals.js"))
             .pipe(gulp.dest("build/scripts"))
             .pipe(gulp.dest("src/Clients/PowerBIVisualsPlayground"))
     else
@@ -244,15 +256,6 @@ gulp.task("combine:internal_js", function () {
             .pipe(uglify("powerbi-visuals.js", jsUglifyOptions))
             .pipe(gulp.dest("build/scripts"))
             .pipe(gulp.dest("src/Clients/PowerBIVisualsPlayground"));
-});
-
-gulp.task("combine:internal_d_ts", function () {
-    return gulp.src([
-        "src/Clients/VisualsCommon/obj/VisualsCommon.d.ts",
-        "src/Clients/VisualsData/obj/VisualsData.d.ts"
-    ])
-        .pipe(concat("powerbi-visuals.d.ts"))
-        .pipe(gulp.dest("build"));
 });
 
 gulp.task("combine:all", function () {
@@ -267,12 +270,14 @@ gulp.task("combine:all", function () {
 });
 
 /* --------------------------- EXTERNALS ---------------------------------- */
-var externalsPath = ["src/Clients/Externals/ThirdPartyIP/D3/*.min.js",
+var externalsPath = [
+    "src/Clients/Externals/ThirdPartyIP/JQuery/2.1.3/jquery.min.js",
+    "src/Clients/Externals/ThirdPartyIP/D3/d3.min.js",
+    "src/Clients/Externals/ThirdPartyIP/LoDash/lodash.min.js",
     "src/Clients/Externals/ThirdPartyIP/GlobalizeJS/globalize.min.js",
     "src/Clients/Externals/ThirdPartyIP/GlobalizeJS/globalize.culture.en-US.js",
-    "src/Clients/Externals/ThirdPartyIP/JQuery/**/*.min.js",
-    "src/Clients/Externals/ThirdPartyIP/jqueryui/1.11.4/jquery-ui.min.js",
-    "src/Clients/Externals/ThirdPartyIP/LoDash/*.min.js"];
+    "src/Clients/Externals/ThirdPartyIP/jqueryui/1.11.4/jquery-ui.min.js"
+];
 gulp.task("combine:external_js", function () {
     return gulp.src(externalsPath)
         .pipe(concat("externals.min.js"))
@@ -298,6 +303,9 @@ var tslintPaths = ["src/Clients/VisualsCommon/**/*.ts",
     "!src/Clients/PowerBIVisualsPlayground/**/*.d.ts"];
 
 gulp.task("tslint", function () {
+    if (noLint)
+        return;
+
     return gulp.src(tslintPaths)
         .pipe(tslint())
         .pipe(tslint.report("verbose"));
@@ -311,6 +319,13 @@ gulp.task("copy:internal_dependencies_visuals_playground", function () {
         .pipe(rename("PowerBIVisualsPlayground.js"))
         .pipe(gulp.dest("src/Clients/PowerBIVisualsPlayground"))
 });
+gulp.task("copy:image_dependencies_visuals_playground", function () {
+    var src = [];
+    src.push("src/Clients/Visuals/images/visuals.sprites.png");
+
+    return gulp.src(src)
+        .pipe(gulp.dest("src/Clients/PowerBIVisualsPlayground/images"))
+});
 /* --------------------------- BUILD SEQUENCIES ---------------------------------- */
 gulp.task("build:visuals", function (callback) {
     runSequence("build:visuals_project", "build:visuals_sprite", "build:visuals_less", callback);
@@ -318,7 +333,6 @@ gulp.task("build:visuals", function (callback) {
 
 gulp.task("build:projects", function (callback) {
     runSequence(
-        "install:jquery-ui",
         "build:visuals_common",
         "build:visuals_data",
         "build:visuals",
@@ -344,6 +358,7 @@ gulp.task("build:visuals_playground", function (callback) {
     runSequence(
         "build:visuals_playground_project",
         "copy:internal_dependencies_visuals_playground",
+        "copy:image_dependencies_visuals_playground",
         callback);
 });
 
@@ -367,9 +382,130 @@ gulp.task('build_debug', function (callback) {
 
 gulp.task('default', ['build_debug']);
 
+/* ------------------------ BUILD PACKAGES ------------------------------- */
+
+gulp.task("build:package", function(callback) {
+    runSequence(
+        "build:package_minified",
+        "copy:package_js_minified",
+        "copy:package_css_minified",
+        "build:package_unminified",
+        "copy:package_js_unminified",
+        "copy:package_css_unminified",
+        "combine:internal_d_ts",
+        "combine:external_d_ts",
+        "replace:references",
+        "copy:package_sprite",
+        callback);
+});
+
+gulp.task('copy:package_js_minified', function () {
+    return copyPackageFile("build/scripts/powerbi-visuals.all.js", "powerbi-visuals.min.js");
+});
+
+gulp.task('copy:package_js_unminified', function () {
+    return copyPackageFile("build/scripts/powerbi-visuals.all.js", "powerbi-visuals.js");
+});
+
+gulp.task('copy:package_css_minified', function () {
+    return copyPackageFile("build/styles/visuals.css", "visuals.min.css");
+});
+
+gulp.task('copy:package_css_unminified', function () {
+    return copyPackageFile("build/styles/visuals.css", "visuals.css");
+});
+
+gulp.task('copy:package_sprite', function () {
+    return copyPackageFile("src/Clients/Visuals/images/visuals.sprites.png", "images/visuals.sprites.png");
+});
+
+gulp.task('build:package_minified', function (callback) {
+    isDebug = false;
+    runSequence(
+        "build:package_projects",
+        callback);
+});
+
+gulp.task('build:package_unminified', function (callback) {
+    isDebug = true;
+    runSequence(
+        "build:package_projects",
+        callback);
+});
+
+gulp.task("build:package_projects", function (callback) {
+    runSequence(
+        "build:visuals_common",
+        "build:visuals_data",
+        "build:visuals",
+        "combine:internal_js",
+        "combine:external_js",
+        "combine:all",
+        callback);
+});
+
+gulp.task("combine:internal_d_ts", function() {
+    return combine({
+        src: [
+            "src/Clients/VisualsCommon/obj/VisualsCommon.d.ts",
+            "src/Clients/VisualsData/obj/VisualsData.d.ts",
+            "src/Clients/Visuals/obj/Visuals.d.ts"
+        ],
+        name: "powerbi-visuals.d.ts",
+        destinationPath: "lib"
+    });
+});
+
+gulp.task("combine:external_d_ts", function() {
+    return combine({
+        src: [
+            "src/Clients/Typedefs/jquery/jquery.d.ts",
+            "src/Clients/Typedefs/d3/d3.d.ts"
+        ],
+        name: "powerbi-externals.d.ts",
+        destinationPath: "lib"
+    });
+});
+
+gulp.task("replace:references", function () {
+    replaceInFile("./lib/powerbi-visuals.d.ts", /\/\/\/\s*<reference path.*\/>\s/g);
+});
+
+function replaceInFile(file, find, replace) {
+    var UTF8 = "utf8";
+    replace = replace || "";
+
+    fs.writeFileSync(file, fs.readFileSync(file, UTF8).replace(find, replace), UTF8);
+}
+
+/**
+ * Concatenate given files into one.
+ * <br/>
+ * <p>Option object props: <br/>
+ *  src {String[]} - Array of paths with files to combine <br/>
+ *  name {String} - Name of resulting file.<br/>
+ *  destinationPath {String} - Destination path where file will be placed.<br/>
+ * <p/>
+ * @
+ * @param {Object} options
+ */
+function combine(options) {
+    return gulp.src(options.src)
+        .pipe(concat(options.name))
+        .pipe(gulp.dest(options.destinationPath));
+}
+
+function copyPackageFile(inputFile, outputFile) {
+	var src = [];
+    src.push(inputFile);
+	
+	return gulp.src(src)
+        .pipe(rename(outputFile))
+        .pipe(gulp.dest("lib"))
+}
 /* --------------------------- WATCHERS ---------------------------------- */
 var lintErrors = false;
-const lintReporter = function (output, file, options) {
+var lintReporter = function (output, file, options) {
     if (output.length > 0)
         lintErrors = true;
     // file is a reference to the vinyl File object 
@@ -466,29 +602,6 @@ function installExternalDependency(path, fileName, url, callback) {
     });
 } 
 
-/** -------------------------- Download 'jquery-ui.min.js' --------------------------------*/
-gulp.task("install:jquery-ui:js", function(callback) {
-    installExternalDependency(
-        "src/Clients/Externals/ThirdPartyIP/jqueryui/1.11.4",
-        "jquery-ui.min.js",
-        "https://code.jquery.com/ui/1.11.4/jquery-ui.min.js",
-        callback);
-});
-
-/** -------------------------- Download 'jquery-ui.min.css' --------------------------------*/
-gulp.task("install:jquery-ui:css", function(callback) {
-    installExternalDependency(
-        "src/Clients/Externals/ThirdPartyIP/jqueryui/1.11.4",
-        "jquery-ui.min.css",
-        "https://code.jquery.com/ui/1.11.4/themes/black-tie/jquery-ui.min.css",
-        callback);
-});
-
-/** -------------------------- Download 'jquery-ui' --------------------------------*/
-gulp.task("install:jquery-ui", function(callback) {
-    runSequence("install:jquery-ui:js", "install:jquery-ui:css", callback);
-});
-
 /** --------------------------Download 'JASMINE-jquery.js' --------------------------------*/
 gulp.task('install:jasmine', function (callback) {
     fs.exists('src/Clients/Externals/ThirdPartyIP/JasmineJQuery/jasmine-jquery.js', function (exists) {
@@ -568,7 +681,17 @@ gulp.task("copy:internal_dependencies_visuals_tests", function () {
 
 gulp.task("copy:external_dependencies_visuals_tests", function () {
     return gulp.src([
-        "build/scripts/powerbi-visuals.all.js"
+        "build/styles/visuals.css",
+        "build/scripts/powerbi-visuals.all.js",
+        "src/Clients/externals/ThirdPartyIP/JasmineJQuery/jasmine-jquery.js",
+        "src/Clients/externals/ThirdPartyIP/MomentJS/moment.min.js",
+        "src/Clients/externals/ThirdPartyIP/Velocity/velocity.min.js",
+        "src/Clients/externals/ThirdPartyIP/Velocity/velocity.ui.min.js",
+        "src/Clients/externals/ThirdPartyIP/QuillJS/quill.min.js",
+        "node_modules/jasmine-core/lib/jasmine-core/jasmine.js",
+        "node_modules/jasmine-core/lib/jasmine-core/jasmine-html.js",
+        "node_modules/jasmine-core/lib/jasmine-core/boot.js",
+        "node_modules/jasmine-core/lib/jasmine-core/jasmine.css"
     ])
         .pipe(gulp.dest("VisualsTests"));
 });
@@ -581,15 +704,24 @@ gulp.task("copy:dependencies_visuals_tests", function (callback) {
         );
 });
 
-function addLinks(links) {
-    return (links.map(function (link) {
-        return '<link rel="stylesheet" href="' + link + '"/>';
-    })).join("");
+function addLink(link) {
+    return '<link rel="stylesheet" type="text/css" href="' + link + '"/>';
 }
 
-function addScripts(scripts) {
-    return (scripts.map(function (script) {
-        return '<script src="' + script + '"></script>';
+function addScript(script) {
+    return '<script type="text/javascript" src="' + script + '"></script>';
+}
+
+function addPaths(paths) {
+    var cssExtension = /.+\.css/,
+        jsExtension = /.+\.js/;
+    
+    return (paths.map(function (path) {
+        if (jsExtension.test(path)) {
+            return addScript(path);
+        } else if (cssExtension.test(path)) {
+            return addLink(path);
+        }
     })).join("");
 }
 
@@ -604,52 +736,57 @@ function addTestName(testName) {
     }
 }
 
-function createHtmlTestRunner(fileName, scripts, styles, testName) {
-    var html = "<!DOCTYPE html><html>";
-    var head = '<head><meta charset="utf-8">' + addLinks(styles) + '</head>';
-    var body = "<body>" + addScripts(scripts) + addTestName(testName) + "</body>";
+function createHtmlTestRunner(fileName, paths, testName) {
+    var html = "<!DOCTYPE html><html>",
+        head =
+            "<head>"
+            + '<meta charset="utf-8">'
+            + "<title>Jasmine Spec Runner</title>"
+            + addPaths(paths)
+            + addTestName(testName)
+            + "</head>",
+        body = "<body></body>";
 
     html = html + head + body + "</html>";
 
     fs.writeFileSync(fileName, html);
 }
 
-gulp.task("run:tests", function () {
-    var src = [
-        "powerbi-visuals.all.js",
-        "../src/Clients/externals/ThirdPartyIP/JasmineJQuery/jasmine-jquery.js",
-        "../src/Clients/externals/ThirdPartyIP/MomentJS/moment.min.js",
-        "../src/Clients/externals/ThirdPartyIP/Velocity/velocity.min.js",
-        "../src/Clients/externals/ThirdPartyIP/Velocity/velocity.ui.min.js",
-        "../src/Clients/externals/ThirdPartyIP/QuillJS/quill.min.js",
-        "powerbi-visuals-tests.js"
-    ];
-
-    var scripts = [
-        "../node_modules/jasmine-core/lib/jasmine-core/jasmine.js",
-        "../node_modules/jasmine-core/lib/jasmine-core/jasmine-html.js",
-        "../node_modules/jasmine-core/lib/jasmine-core/boot.js"
-    ];
-
-    var links = [
-        "../node_modules/jasmine-core/lib/jasmine-core/jasmine.css"
-    ];
-
-    var specRunnerFileName = "VisualsTests/runner.html";
-
-    var openInBrowser = cliArguments.openInBrowser;
+gulp.task("run:test", function (callback) {
+    var testFolder = "VisualsTests",
+        specRunnerFileName = "runner.html",
+        specRunnerPath = testFolder + "/" + specRunnerFileName,
+        src = [
+            "visuals.css",
+            "powerbi-visuals.all.js",
+            "jasmine-jquery.js",
+            "velocity.min.js",
+            "velocity.ui.min.js",
+            "quill.min.js",
+            "moment.min.js",
+            "powerbi-visuals-tests.js"
+        ],
+        jasminePaths = [
+            "jasmine.css",
+            "jasmine.js",
+            "jasmine-html.js",
+            "boot.js"
+        ];
 
     createHtmlTestRunner(
-        specRunnerFileName,
-        scripts.concat(src),
-        links,
-        getOptionFromCli(openInBrowser)[0]);
+        specRunnerPath,
+        jasminePaths.concat(src),
+        getOptionFromCli(openInBrowser)[0]
+    );
 
     if (openInBrowser) {
-        return gulp.src(specRunnerFileName)
-            .pipe(open());
+        runHttpServer({
+            path: testFolder,
+            port: 3001,
+            index: specRunnerFileName
+        }, callback);
     } else {
-        return gulp.src(src, {cwd: "VisualsTests"})
+        return gulp.src(src, {cwd: testFolder})
             .pipe(jasmineBrowser.specRunner({console: true}))
             .pipe(jasmineBrowser.headless());
     }
@@ -668,7 +805,59 @@ gulp.task("test", function (callback) {
         "install:phantomjs",
         "combine:all",
         "copy:dependencies_visuals_tests",
-        "run:tests",
+        "run:test",
         callback);
 });
 
+gulp.task("open:test", function (callback) {
+    openInBrowser = true;
+    
+    runSequence("test", callback);
+});
+
+function runHttpServer(settings, callback) {
+    var server = null,
+        path = settings.path,
+        port = settings.port || 3000,
+        host = settings.host || "localhost",
+        index = settings.index || "index.html";
+    
+    expressServer.use(express.static(
+        path, {
+            index: index
+        }));
+
+    server = expressServer.listen(port, host, function () {
+        var uri =
+            "http://" +
+            server.address().address +
+            ":" +
+            server.address().port;
+        
+        console.log("Server started on %s", uri);
+        
+        gulp.src(path).pipe(open({
+            uri: uri
+        }));
+    });
+    
+    process.on("SIGINT", function () {
+        if (server && server.close) {
+            server.close();
+        }
+        
+        callback();
+        
+        process.exit();
+    });
+}
+
+gulp.task("run:playground", function (callback) {
+    runHttpServer({
+        path: "src/Clients/PowerBIVisualsPlayground"
+    }, callback);
+});
+
+gulp.task("build:run:playground", function (callback) {
+    runSequence("build", "run:playground", callback);
+});
